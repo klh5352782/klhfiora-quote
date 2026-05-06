@@ -31,6 +31,9 @@ function Chat() {
     const aero = useAero();
     const self = useSelector((state: State) => state.user?._id) || '';
 
+    // ======== 引用功能状态 ========
+    const [quoteMessage, setQuoteMessage] = useState<any>(null);
+
     function handleBodyClick(e: MouseEvent) {
         const { currentTarget } = e;
         let target = e.target as HTMLDivElement;
@@ -152,8 +155,13 @@ function Chat() {
                 isOnline={linkman.isOnline}
                 onClickFunction={handleClickFunction}
             />
-            <MessageList />
-            <ChatInput />
+            {/* 传递 onQuote 给 MessageList */}
+            <MessageList onQuote={setQuoteMessage} />
+            {/* 传递 quoteMessage 和 setQuoteMessage 给 ChatInput */}
+            <ChatInput
+                quoteMessage={quoteMessage}
+                setQuoteMessage={setQuoteMessage}
+            />
 
             {linkman.type === 'group' && (
                 <GroupManagePanel

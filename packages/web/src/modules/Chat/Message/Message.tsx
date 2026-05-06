@@ -42,17 +42,14 @@ interface MessageProps {
     shouldScroll: boolean;
     tagColorMode: string;
     isAdmin?: boolean;
+    // 新增：引用回调
+    onQuote?: (message: any) => void;
 }
 
 interface MessageState {
     showButtonList: boolean;
 }
 
-/**
- * Message组件用hooks实现有些问题
- * 功能上要求Message组件渲染后触发滚动, 实测中发现在useEffect中触发滚动会比在componentDidMount中晚
- * 具体表现就是会先看到历史消息, 然后一闪而过再滚动到合适的位置
- */
 @pureRender
 class Message extends Component<MessageProps, MessageState> {
     $container = createRef<HTMLDivElement>();
@@ -73,25 +70,14 @@ class Message extends Component<MessageProps, MessageState> {
     }
 
     handleMouseEnter = () => {
-        const { isAdmin, isSelf, type } = this.props;
-        if (type === 'system') {
-            return;
-        }
-        if (isAdmin || (!client.disableDeleteMessage && isSelf)) {
-            this.setState({ showButtonList: true });
-        }
+        // 修改：总是显示按钮区域，以便引用按钮也能出现
+        this.setState({ showButtonList: true });
     };
 
     handleMouseLeave = () => {
-        const { isAdmin, isSelf } = this.props;
-        if (isAdmin || (!client.disableDeleteMessage && isSelf)) {
-            this.setState({ showButtonList: false });
-        }
+        this.setState({ showButtonList: false });
     };
 
-    /**
-     * 管理员撤回消息
-     */
     handleDeleteMessage = async () => {
         const { id, linkmanId, loading, isAdmin } = this.props;
         if (loading) {
@@ -117,6 +103,20 @@ class Message extends Component<MessageProps, MessageState> {
                 } as DeleteMessagePayload,
             });
             this.setState({ showButtonList: false });
+        }
+    };
+
+    // 新增：引用消息处理
+    handleQuote = () => {
+        const { onQuote } = this.props;
+        if (onQuote) {
+            const { id, username, content, type, avatar } = this.props;
+            onQuote({
+                _id: id,
+                from: { username, avatar },
+                content,
+                type,
+            });
         }
     };
 
@@ -187,7 +187,8 @@ class Message extends Component<MessageProps, MessageState> {
     }
 
     render() {
-        const { isSelf, avatar, tag, tagColorMode, username } = this.props;
+        const { isSelf, avatar, tag, tagColorMode, username, type, isAdmin } =
+            this.props;
         const { showButtonList } = this.state;
 
         let tagColor = `rgb(${themes.default.primaryColor})`;
@@ -238,22 +239,48 @@ class Message extends Component<MessageProps, MessageState> {
                         </div>
                         {showButtonList && (
                             <div className={Style.buttonList}>
-                                <Tooltip
-                                    placement={isSelf ? 'left' : 'right'}
-                                    mouseEnterDelay={0.3}
-                                    overlay={<span>撤回消息</span>}
-                                >
-                                    <div>
-                                        <IconButton
-                                            className={Style.button}
-                                            icon="recall"
-                                            iconSize={16}
-                                            width={20}
-                                            height={20}
-                                            onClick={this.handleDeleteMessage}
-                                        />
-                                    </div>
-                                </Tooltip>
+                                {/* 引用按钮：非系统消息时显示 */}
+                                {type !== 'system' && (
+                                    <Tooltip
+                                        placement={isSelf ? 'left' : 'right'}
+                                        mouseEnterDelay={0.3}
+                                        overlay={<span>引用</span>}
+                                    >
+                                        <div>
+                                            <IconButton
+                                                className={Style.button}
+                                                icon="quote"
+                                                iconSize={16}
+                                                width={20}
+                                                height={20}
+                                                onClick={this.handleQuote}
+                                            />
+                                        </div>
+                                    </Tooltip>
+                                )}
+                                {/* 撤回按钮：仅管理员或本人可撤回 */}
+                                {(isAdmin ||
+                                    (!client.disableDeleteMessage &&
+                                        isSelf)) && (
+                                    <Tooltip
+                                        placement={isSelf ? 'left' : 'right'}
+                                        mouseEnterDelay={0.3}
+                                        overlay={<span>撤回消息</span>}
+                                    >
+                                        <div>
+                                            <IconButton
+                                                className={Style.button}
+                                                icon="recall"
+                                                iconSize={16}
+                                                width={20}
+                                                height={20}
+                                                onClick={
+                                                    this.handleDeleteMessage
+                                                }
+                                            />
+                                        </div>
+                                    </Tooltip>
+                                )}
                             </div>
                         )}
                     </div>

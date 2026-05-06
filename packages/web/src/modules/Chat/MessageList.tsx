@@ -37,7 +37,11 @@ const styles = {
     `,
 };
 
-function MessageList() {
+interface Props {
+    onQuote?: (msg: any) => void;
+}
+
+function MessageList({ onQuote }: Props) {
     const action = useAction();
     const selfId = useSelector((state: State) => state.user?._id || '');
     const focus = useSelector((state: State) => state.focus);
@@ -71,7 +75,6 @@ function MessageList() {
 
     let isFetching = false;
     async function handleScroll(e: any) {
-        // Don't know why the code-view dialog will also trigger when scrolling
         if ($list.current && e.target !== $list.current) {
             return;
         }
@@ -112,7 +115,6 @@ function MessageList() {
         const isSelf = message.from._id === selfId;
         let shouldScroll = true;
         if ($list.current) {
-            // @ts-ignore
             const { scrollHeight, clientHeight, scrollTop } = $list.current;
             shouldScroll =
                 isSelf ||
@@ -144,6 +146,7 @@ function MessageList() {
                 percent={message.percent}
                 shouldScroll={shouldScroll}
                 tagColorMode={tagColorMode}
+                onQuote={onQuote}
             />
         );
     }

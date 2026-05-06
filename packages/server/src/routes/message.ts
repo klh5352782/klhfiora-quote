@@ -97,7 +97,8 @@ export async function sendMessage(ctx: Context<SendMessageData>) {
         );
     }
 
-    const { to, content } = ctx.data;
+    // ---------- 接收 quote 参数 ----------
+    const { to, content, quote } = ctx.data;
     let { type } = ctx.data;
     assert(to, 'to不能为空');
 
@@ -168,13 +169,16 @@ export async function sendMessage(ctx: Context<SendMessageData>) {
         throw new AssertionError({ message: '用户不存在' });
     }
 
+    // ---------- 存储 quote ----------
     const message = await Message.create({
         from: ctx.socket.user,
         to,
         type,
         content: messageContent,
+        quote: quote || null,   // 新增
     } as MessageDocument);
 
+    // ---------- 返回 quote ----------
     const messageData = {
         _id: message._id,
         createTime: message.createTime,
@@ -182,6 +186,7 @@ export async function sendMessage(ctx: Context<SendMessageData>) {
         to,
         type,
         content: message.content,
+        quote: message.quote,   // 新增
     };
     if (type === 'inviteV2') {
         await handleInviteV2Message(messageData);

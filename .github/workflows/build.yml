@@ -1,0 +1,29 @@
+name: Build Fiora Docker Image
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        run: docker build -t fiora-custom .
+
+      - name: Export image as tar
+        run: |
+          docker save fiora-custom -o fiora-custom.tar
+          mkdir -p output
+          mv fiora-custom.tar output/
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: fiora-custom
+          path: output/

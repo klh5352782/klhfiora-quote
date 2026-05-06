@@ -18,6 +18,13 @@ const MessageSchema = new Schema({
         enum: ['text', 'image', 'file', 'code', 'inviteV2', 'system'],
         default: 'text',
     },
+    // ======== 新增 quote 字段 ========
+    quote: {
+        type: Schema.Types.ObjectId,
+        ref: 'Message',
+        default: null,
+    },
+    // ======== 结束 ========
     content: {
         type: String,
         default: '',
@@ -41,6 +48,8 @@ export interface MessageDocument extends Document {
     createTime: Date;
     /** Has it been deleted */
     deleted: boolean;
+    /** 引用的消息ID（可选） */
+    quote?: string | null;
 }
 
 /**
