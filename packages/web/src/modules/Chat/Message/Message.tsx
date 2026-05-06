@@ -42,8 +42,7 @@ interface MessageProps {
     shouldScroll: boolean;
     tagColorMode: string;
     isAdmin?: boolean;
-    // 新增：引用回调
-    onQuote?: (message: any) => void;
+    onQuote?: (message: any) => void; // 引用回调
 }
 
 interface MessageState {
@@ -56,21 +55,17 @@ class Message extends Component<MessageProps, MessageState> {
 
     constructor(props: MessageProps) {
         super(props);
-        this.state = {
-            showButtonList: false,
-        };
+        this.state = { showButtonList: false };
     }
 
     componentDidMount() {
         const { shouldScroll } = this.props;
         if (shouldScroll) {
-            // @ts-ignore
-            this.$container.current.scrollIntoView();
+            this.$container.current?.scrollIntoView();
         }
     }
 
     handleMouseEnter = () => {
-        // 修改：总是显示按钮区域，以便引用按钮也能出现
         this.setState({ showButtonList: true });
     };
 
@@ -106,9 +101,10 @@ class Message extends Component<MessageProps, MessageState> {
         }
     };
 
-    // 新增：引用消息处理
+    // 📌 引用消息处理（已添加调试日志）
     handleQuote = () => {
         const { onQuote } = this.props;
+        console.log('[Quote] clicked, onQuote:', onQuote);
         if (onQuote) {
             const { id, username, content, type, avatar } = this.props;
             onQuote({
@@ -117,17 +113,15 @@ class Message extends Component<MessageProps, MessageState> {
                 content,
                 type,
             });
+        } else {
+            console.warn('[Quote] onQuote prop is not defined');
         }
     };
 
     handleClickAvatar(showUserInfo: (userinfo: any) => void) {
         const { isSelf, userId, type, username, avatar } = this.props;
         if (!isSelf && type !== 'system') {
-            showUserInfo({
-                _id: userId,
-                username,
-                avatar,
-            });
+            showUserInfo({ _id: userId, username, avatar });
         }
     }
 
@@ -141,54 +135,33 @@ class Message extends Component<MessageProps, MessageState> {
         if (Time.isYesterday(nowTime, messageTime)) {
             return `昨天 ${Time.getHourMinute(messageTime)}`;
         }
-        return `${Time.getMonthDate(messageTime)} ${Time.getHourMinute(
-            messageTime,
-        )}`;
+        return `${Time.getMonthDate(messageTime)} ${Time.getHourMinute(messageTime)}`;
     }
 
     renderContent() {
         const { type, content, loading, percent, originUsername } = this.props;
         switch (type) {
-            case 'text': {
+            case 'text':
                 return <TextMessage content={content} />;
-            }
-            case 'image': {
-                return (
-                    <ImageMessage
-                        src={content}
-                        loading={loading}
-                        percent={percent}
-                    />
-                );
-            }
-            case 'file': {
+            case 'image':
+                return <ImageMessage src={content} loading={loading} percent={percent} />;
+            case 'file':
                 return <FileMessage file={content} percent={percent} />;
-            }
-            case 'code': {
+            case 'code':
                 return <CodeMessage code={content} />;
-            }
-            case 'url': {
+            case 'url':
                 return <UrlMessage url={content} />;
-            }
-            case 'inviteV2': {
+            case 'inviteV2':
                 return <InviteMessageV2 inviteInfo={content} />;
-            }
-            case 'system': {
-                return (
-                    <SystemMessage
-                        message={content}
-                        username={originUsername}
-                    />
-                );
-            }
+            case 'system':
+                return <SystemMessage message={content} username={originUsername} />;
             default:
                 return <div className="unknown">不支持的消息类型</div>;
         }
     }
 
     render() {
-        const { isSelf, avatar, tag, tagColorMode, username, type, isAdmin } =
-            this.props;
+        const { isSelf, avatar, tag, tagColorMode, username, type, isAdmin } = this.props;
         const { showButtonList } = this.state;
 
         let tagColor = `rgb(${themes.default.primaryColor})`;
@@ -199,30 +172,21 @@ class Message extends Component<MessageProps, MessageState> {
         }
 
         return (
-            <div
-                className={`${Style.message} ${isSelf ? Style.self : ''}`}
-                ref={this.$container}
-            >
+            <div className={`${Style.message} ${isSelf ? Style.self : ''}`} ref={this.$container}>
                 <ShowUserOrGroupInfoContext.Consumer>
                     {(context) => (
                         <Avatar
                             className={Style.avatar}
                             src={avatar}
                             size={44}
-                            onClick={() =>
-                                // @ts-ignore
-                                this.handleClickAvatar(context.showUserInfo)
-                            }
+                            onClick={() => this.handleClickAvatar(context.showUserInfo)}
                         />
                     )}
                 </ShowUserOrGroupInfoContext.Consumer>
                 <div className={Style.right}>
                     <div className={Style.nicknameTimeBlock}>
                         {tag && (
-                            <span
-                                className={Style.tag}
-                                style={{ backgroundColor: tagColor }}
-                            >
+                            <span className={Style.tag} style={{ backgroundColor: tagColor }}>
                                 {tag}
                             </span>
                         )}
@@ -234,18 +198,12 @@ class Message extends Component<MessageProps, MessageState> {
                         onMouseEnter={this.handleMouseEnter}
                         onMouseLeave={this.handleMouseLeave}
                     >
-                        <div className={Style.content}>
-                            {this.renderContent()}
-                        </div>
+                        <div className={Style.content}>{this.renderContent()}</div>
                         {showButtonList && (
                             <div className={Style.buttonList}>
-                                {/* 引用按钮：非系统消息时显示 */}
+                                {/* 引用按钮 */}
                                 {type !== 'system' && (
-                                    <Tooltip
-                                        placement={isSelf ? 'left' : 'right'}
-                                        mouseEnterDelay={0.3}
-                                        overlay={<span>引用</span>}
-                                    >
+                                    <Tooltip placement={isSelf ? 'left' : 'right'} mouseEnterDelay={0.3} overlay={<span>引用</span>}>
                                         <div>
                                             <IconButton
                                                 className={Style.button}
@@ -258,15 +216,9 @@ class Message extends Component<MessageProps, MessageState> {
                                         </div>
                                     </Tooltip>
                                 )}
-                                {/* 撤回按钮：仅管理员或本人可撤回 */}
-                                {(isAdmin ||
-                                    (!client.disableDeleteMessage &&
-                                        isSelf)) && (
-                                    <Tooltip
-                                        placement={isSelf ? 'left' : 'right'}
-                                        mouseEnterDelay={0.3}
-                                        overlay={<span>撤回消息</span>}
-                                    >
+                                {/* 撤回按钮 */}
+                                {(isAdmin || (!client.disableDeleteMessage && isSelf)) && (
+                                    <Tooltip placement={isSelf ? 'left' : 'right'} mouseEnterDelay={0.3} overlay={<span>撤回消息</span>}>
                                         <div>
                                             <IconButton
                                                 className={Style.button}
@@ -274,9 +226,7 @@ class Message extends Component<MessageProps, MessageState> {
                                                 iconSize={16}
                                                 width={20}
                                                 height={20}
-                                                onClick={
-                                                    this.handleDeleteMessage
-                                                }
+                                                onClick={this.handleDeleteMessage}
                                             />
                                         </div>
                                     </Tooltip>
