@@ -56,10 +56,15 @@ const CodeEditorAsync = loadable(
 );
 
 let searchExpressionTimer: number = 0;
-
 let inputIME = false;
 
-function ChatInput() {
+// 引用功能的 props 接口
+interface Props {
+    quoteMessage?: any;
+    setQuoteMessage?: (msg: any) => void;
+}
+
+function ChatInput({ quoteMessage, setQuoteMessage }: Props) {
     const action = useAction();
     const isLogin = useIsLogin();
     const connect = useSelector((state: State) => state.connect);
@@ -84,6 +89,11 @@ function ChatInput() {
     const [expressions, setExpressions] = useState<
         { image: string; width: number; height: number }[]
     >([]);
+
+    // 调试日志：每次 quoteMessage 变化时输出
+    useEffect(() => {
+        console.log('quoteMessage received:', quoteMessage);
+    }, [quoteMessage]);
 
     /** 全局输入框聚焦快捷键 */
     function focusInput(e: KeyboardEvent) {
@@ -200,11 +210,12 @@ function ChatInput() {
         type: string,
         content: string,
         linkmanId = focus,
+        quote?: string,
     ) {
         if (linkman.unread > 0) {
             action.setLinkmanProperty(linkman._id, 'unread', 0);
         }
-        const [error, message] = await sendMessage(linkmanId, type, content);
+        const [error, message] = await sendMessage(linkmanId, type, content, quote);
         if (error) {
             action.deleteMessage(focus, localId, true);
         } else {
@@ -331,7 +342,6 @@ function ChatInput() {
         key: string;
         domEvent: any;
     }) {
-        // Quickly hitting the Enter key causes the button to repeatedly trigger the problem
         if (domEvent.keyCode === 13) {
             return;
         }
@@ -358,7 +368,6 @@ function ChatInput() {
     }
 
     async function handlePaste(e: any) {
-        // eslint-disable-next-line react/destructuring-assignment
         if (!connect) {
             e.preventDefault();
             return Message.error('发送消息失败, 您当前处于离线状态');
@@ -366,7 +375,6 @@ function ChatInput() {
         const { items, types } =
             e.clipboardData || e.originalEvent.clipboardData;
 
-        // 如果包含文件内容
         if (types.indexOf('Files') > -1) {
             for (let index = 0; index < items.length; index++) {
                 const item = items[index];
@@ -391,7 +399,6 @@ function ChatInput() {
                                     result: imageBlob,
                                 });
                             };
-                            // eslint-disable-next-line react/no-this-in-sfc
                             image.src = this.result as string;
                         };
                         reader.readAsDataURL(file);
@@ -434,7 +441,9 @@ function ChatInput() {
             handleSendMessage(id, 'inviteV2', groupId);
         } else {
             const id = addSelfMessage('text', xss(message));
-            handleSendMessage(id, 'text', message);
+            // 发送文本消息时带上 quote，并清空引用状态
+            handleSendMessage(id, 'text', message, focus, quoteMessage?._id);
+            if (setQuoteMessage) setQuoteMessage(null);
         }
 
         // @ts-ignore
@@ -479,37 +488,26 @@ function ChatInput() {
             toggleExpressionDialog(true);
             e.preventDefault();
         } else if (e.key === '@') {
-            // 如果按下@建, 则进入@计算模式
-            // @ts-ignore
             if (!/@/.test($input.current.value)) {
                 setAt({
                     enable: true,
                     content: '',
                 });
             }
-            // eslint-disable-next-line react/destructuring-assignment
         } else if (at.enable) {
-            // 如果处于@计算模式
             const { key } = e;
-            // 延时, 以便拿到新的value和ime状态
             setTimeout(() => {
-                // 如果@已经被删掉了, 退出@计算模式
-                // @ts-ignore
                 if (!/@/.test($input.current.value)) {
                     setAt({ enable: false, content: '' });
                     return;
                 }
-                // 如果是输入中文, 并且不是空格键, 忽略输入
                 if (inputIME && key !== ' ') {
                     return;
                 }
-                // 如果是不是输入中文, 并且是空格键, 则@计算模式结束
                 if (!inputIME && key === ' ') {
                     setAt({ enable: false, content: '' });
                     return;
                 }
-
-                // 如果是正在输入中文, 则直接返回, 避免取到拼音字母
                 if (inputIME) {
                     return;
                 }
@@ -520,7 +518,6 @@ function ChatInput() {
                 }
             }, 100);
         } else if (enableSearchExpression) {
-            // Set timer to get current input value
             setTimeout(() => {
                 if (inputIME) {
                     return;
@@ -591,148 +588,157 @@ function ChatInput() {
     }
 
     return (
-        <div className={Style.chatInput} {...aero}>
-            <Dropdown
-                trigger={['click']}
-                visible={expressionDialog}
-                onVisibleChange={toggleExpressionDialog}
-                overlay={
-                    <div className={Style.expressionDropdown}>
-                        <ExpressionAsync
-                            onSelectText={handleSelectExpression}
-                            onSelectImage={sendImageMessage}
-                        />
-                    </div>
-                }
-                animation="slide-up"
-                placement="topLeft"
-            >
-                <IconButton
-                    className={Style.iconButton}
-                    width={44}
-                    height={44}
-                    icon="expression"
-                    iconSize={32}
-                />
-            </Dropdown>
-            <Dropdown
-                trigger={['click']}
-                overlay={
-                    <div className={Style.featureDropdown}>
-                        <Menu onClick={handleFeatureMenuClick}>
-                            <MenuItem key="huaji">发送滑稽</MenuItem>
-                            <MenuItem key="image">发送图片</MenuItem>
-                            <MenuItem key="code">发送代码</MenuItem>
-                            <MenuItem key="file">发送文件</MenuItem>
-                        </Menu>
-                    </div>
-                }
-                animation="slide-up"
-                placement="topLeft"
-            >
-                <IconButton
-                    className={Style.iconButton}
-                    width={44}
-                    height={44}
-                    icon="feature"
-                    iconSize={32}
-                />
-            </Dropdown>
-            <form
-                className={Style.form}
-                autoComplete="off"
-                onSubmit={(e) => e.preventDefault()}
-            >
-                <input
-                    className={Style.input}
-                    type="text"
-                    placeholder="随便聊点啥吧, 不要无意义刷屏~~"
-                    maxLength={2048}
-                    ref={$input}
-                    onKeyDown={handleInputKeyDown}
-                    onPaste={handlePaste}
-                    onCompositionStart={() => {
-                        inputIME = true;
-                    }}
-                    onCompositionEnd={() => {
-                        inputIME = false;
-                    }}
-                    onFocus={() => toggleInputFocus(true)}
-                    onBlur={() => toggleInputFocus(false)}
-                />
-
-                {!isMobile && !inputFocus && (
-                    <Tooltip
-                        placement="top"
-                        mouseEnterDelay={0.5}
-                        overlay={
-                            <span>
-                                支持粘贴图片发图
-                                <br />
-                                全局按 i 键聚焦
-                            </span>
-                        }
-                    >
-                        <i className={`iconfont icon-about ${Style.tooltip}`} />
-                    </Tooltip>
-                )}
-            </form>
-            <IconButton
-                className={Style.iconButton}
-                width={44}
-                height={44}
-                icon="send"
-                iconSize={32}
-                onClick={sendTextMessage}
-            />
-
-            <div className={Style.atPanel}>
-                {at.enable &&
-                    getSuggestion().map((member) => (
-                        <div
-                            className={Style.atUserList}
-                            key={member.user._id}
-                            onClick={() => replaceAt(member.user.username)}
-                            role="button"
-                        >
-                            <Avatar size={24} src={member.user.avatar} />
-                            <p className={Style.atText}>
-                                {member.user.username}
-                            </p>
-                        </div>
-                    ))}
-            </div>
-
-            {codeEditorDialog && (
-                <CodeEditorAsync
-                    visible={codeEditorDialog}
-                    onClose={() => toggleCodeEditorDialog(false)}
-                    onSend={handleSendCode}
-                />
-            )}
-
-            {expressions.length > 0 && (
-                <div className={expressionList}>
-                    {expressions.map(({ image, width, height }) => (
-                        <div className={expressionImageContainer}>
-                            <img
-                                className={expressionImage}
-                                src={image}
-                                key={image}
-                                alt="表情图"
-                                onClick={() =>
-                                    handleClickExpressionImage(
-                                        image,
-                                        width,
-                                        height,
-                                    )
-                                }
-                            />
-                        </div>
-                    ))}
+        <>
+            {/* 引用预览条 */}
+            {quoteMessage && (
+                <div style={{ background: '#eee', padding: '4px 8px', display: 'flex', alignItems: 'center' }}>
+                    <span style={{ flex: 1 }}>引用 {quoteMessage.from?.username}: {quoteMessage.content}</span>
+                    <button onClick={() => setQuoteMessage?.(null)} style={{ cursor: 'pointer' }}>取消</button>
                 </div>
             )}
-        </div>
+            <div className={Style.chatInput} {...aero}>
+                <Dropdown
+                    trigger={['click']}
+                    visible={expressionDialog}
+                    onVisibleChange={toggleExpressionDialog}
+                    overlay={
+                        <div className={Style.expressionDropdown}>
+                            <ExpressionAsync
+                                onSelectText={handleSelectExpression}
+                                onSelectImage={sendImageMessage}
+                            />
+                        </div>
+                    }
+                    animation="slide-up"
+                    placement="topLeft"
+                >
+                    <IconButton
+                        className={Style.iconButton}
+                        width={44}
+                        height={44}
+                        icon="expression"
+                        iconSize={32}
+                    />
+                </Dropdown>
+                <Dropdown
+                    trigger={['click']}
+                    overlay={
+                        <div className={Style.featureDropdown}>
+                            <Menu onClick={handleFeatureMenuClick}>
+                                <MenuItem key="huaji">发送滑稽</MenuItem>
+                                <MenuItem key="image">发送图片</MenuItem>
+                                <MenuItem key="code">发送代码</MenuItem>
+                                <MenuItem key="file">发送文件</MenuItem>
+                            </Menu>
+                        </div>
+                    }
+                    animation="slide-up"
+                    placement="topLeft"
+                >
+                    <IconButton
+                        className={Style.iconButton}
+                        width={44}
+                        height={44}
+                        icon="feature"
+                        iconSize={32}
+                    />
+                </Dropdown>
+                <form
+                    className={Style.form}
+                    autoComplete="off"
+                    onSubmit={(e) => e.preventDefault()}
+                >
+                    <input
+                        className={Style.input}
+                        type="text"
+                        placeholder="随便聊点啥吧, 不要无意义刷屏~~"
+                        maxLength={2048}
+                        ref={$input}
+                        onKeyDown={handleInputKeyDown}
+                        onPaste={handlePaste}
+                        onCompositionStart={() => {
+                            inputIME = true;
+                        }}
+                        onCompositionEnd={() => {
+                            inputIME = false;
+                        }}
+                        onFocus={() => toggleInputFocus(true)}
+                        onBlur={() => toggleInputFocus(false)}
+                    />
+
+                    {!isMobile && !inputFocus && (
+                        <Tooltip
+                            placement="top"
+                            mouseEnterDelay={0.5}
+                            overlay={
+                                <span>
+                                    支持粘贴图片发图
+                                    <br />
+                                    全局按 i 键聚焦
+                                </span>
+                            }
+                        >
+                            <i className={`iconfont icon-about ${Style.tooltip}`} />
+                        </Tooltip>
+                    )}
+                </form>
+                <IconButton
+                    className={Style.iconButton}
+                    width={44}
+                    height={44}
+                    icon="send"
+                    iconSize={32}
+                    onClick={sendTextMessage}
+                />
+
+                <div className={Style.atPanel}>
+                    {at.enable &&
+                        getSuggestion().map((member) => (
+                            <div
+                                className={Style.atUserList}
+                                key={member.user._id}
+                                onClick={() => replaceAt(member.user.username)}
+                                role="button"
+                            >
+                                <Avatar size={24} src={member.user.avatar} />
+                                <p className={Style.atText}>
+                                    {member.user.username}
+                                </p>
+                            </div>
+                        ))}
+                </div>
+
+                {codeEditorDialog && (
+                    <CodeEditorAsync
+                        visible={codeEditorDialog}
+                        onClose={() => toggleCodeEditorDialog(false)}
+                        onSend={handleSendCode}
+                    />
+                )}
+
+                {expressions.length > 0 && (
+                    <div className={expressionList}>
+                        {expressions.map(({ image, width, height }) => (
+                            <div className={expressionImageContainer}>
+                                <img
+                                    className={expressionImage}
+                                    src={image}
+                                    key={image}
+                                    alt="表情图"
+                                    onClick={() =>
+                                        handleClickExpressionImage(
+                                            image,
+                                            width,
+                                            height,
+                                        )
+                                    }
+                                />
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+        </>
     );
 }
 

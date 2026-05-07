@@ -281,9 +281,10 @@ export async function searchExpression(keywords: string) {
  * @param to 目标
  * @param type 消息类型
  * @param content 消息内容
+ * @param quote 引用的消息ID（可选）
  */
-export async function sendMessage(to: string, type: string, content: string) {
-    return fetch('sendMessage', { to, type, content });
+export async function sendMessage(to: string, type: string, content: string, quote?: string) {
+    return fetch('sendMessage', { to, type, content, quote });
 }
 
 /**
