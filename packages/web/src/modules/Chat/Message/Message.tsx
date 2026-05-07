@@ -101,7 +101,7 @@ class Message extends Component<MessageProps, MessageState> {
         }
     };
 
-    // 📌 引用消息处理（已添加调试日志）
+    // 📌 引用消息处理：优先通过 onQuote 回调，否则直接操作 DOM 插入输入框
     handleQuote = () => {
         const { onQuote } = this.props;
         console.log('[Quote] clicked, onQuote:', onQuote);
@@ -114,7 +114,23 @@ class Message extends Component<MessageProps, MessageState> {
                 type,
             });
         } else {
-            console.warn('[Quote] onQuote prop is not defined');
+            // 直接操作输入框（不依赖 ChatInput 状态）
+            const input = document.querySelector('.chat-input input') as HTMLInputElement;
+            if (input) {
+                const quoteText = `[引用]${this.props.username}: ${this.props.content}[/引用]`;
+                input.focus();
+                // 插入文本到光标处
+                const startPos = input.selectionStart ?? 0;
+                const endPos = input.selectionEnd ?? 0;
+                input.value = input.value.substring(0, startPos) + quoteText + input.value.substring(endPos);
+                input.selectionStart = input.selectionEnd = startPos + quoteText.length;
+                // 触发 React 输入事件，确保状态同步
+                const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!;
+                nativeInputValueSetter.call(input, input.value);
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+            } else {
+                console.warn('[Quote] input element not found');
+            }
         }
     };
 
