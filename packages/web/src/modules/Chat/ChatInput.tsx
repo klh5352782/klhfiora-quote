@@ -90,9 +90,30 @@ function ChatInput({ quoteMessage, setQuoteMessage }: Props) {
         { image: string; width: number; height: number }[]
     >([]);
 
-    // 调试日志：每次 quoteMessage 变化时输出
+    // 当父组件传入引用消息时，自动将引用文本插入输入框光标处
     useEffect(() => {
-        console.log('quoteMessage received:', quoteMessage);
+        if (quoteMessage && $input.current) {
+            const quoteText = `[引用]${quoteMessage.from?.username}: ${quoteMessage.content}[/引用]`;
+            const input = $input.current as unknown as HTMLInputElement;
+            if (input.selectionStart || input.selectionStart === 0) {
+                const startPos = input.selectionStart;
+                const endPos = input.selectionEnd;
+                const restoreTop = input.scrollTop;
+                input.value =
+                    input.value.substring(0, startPos) +
+                    quoteText +
+                    input.value.substring(endPos, input.value.length);
+                if (restoreTop > 0) input.scrollTop = restoreTop;
+                input.focus();
+                input.selectionStart = startPos + quoteText.length;
+                input.selectionEnd = startPos + quoteText.length;
+            } else {
+                input.value += quoteText;
+                input.focus();
+            }
+            // 清空引用状态，防止重复插入
+            if (setQuoteMessage) setQuoteMessage(null);
+        }
     }, [quoteMessage]);
 
     /** 全局输入框聚焦快捷键 */
@@ -106,8 +127,7 @@ function ChatInput({ quoteMessage, setQuoteMessage }: Props) {
             return;
         }
         e.preventDefault();
-        // @ts-ignore
-        $input.current.focus(e);
+        $input.current?.focus();
     }
     useEffect(() => {
         window.addEventListener('keydown', focusInput);
@@ -138,10 +158,6 @@ function ChatInput({ quoteMessage, setQuoteMessage }: Props) {
         );
     }
 
-    /**
-     * 插入文本到输入框光标处
-     * @param value 要插入的文本
-     */
     function insertAtCursor(value: string) {
         const input = $input.current as unknown as HTMLInputElement;
         if (input.selectionStart || input.selectionStart === 0) {
@@ -204,7 +220,6 @@ function ChatInput({ quoteMessage, setQuoteMessage }: Props) {
         return _id;
     }
 
-    // eslint-disable-next-line react/destructuring-assignment
     async function handleSendMessage(
         localId: string,
         type: string,
@@ -239,9 +254,8 @@ function ChatInput({ quoteMessage, setQuoteMessage }: Props) {
             return;
         }
 
-        // @ts-ignore
-        const ext = image.type.split('/').pop().toLowerCase();
-        const url = URL.createObjectURL(image.result);
+        const ext = (image as any).type.split('/').pop().toLowerCase();
+        const url = URL.createObjectURL((image as any).result);
 
         const img = new Image();
         img.onload = async () => {
@@ -251,7 +265,7 @@ function ChatInput({ quoteMessage, setQuoteMessage }: Props) {
             );
             try {
                 const imageUrl = await uploadFile(
-                    image.result as Blob,
+                    (image as any).result as Blob,
                     `ImageMessage/${selfId}_${Date.now()}.${ext}`,
                 );
                 handleSendMessage(
@@ -390,14 +404,13 @@ function ChatInput({ quoteMessage, setQuoteMessage }: Props) {
                                     file.type,
                                     0.8,
                                 );
-                                // @ts-ignore
                                 sendImageMessage({
                                     filename: file.name,
                                     ext: imageBlob?.type.split('/').pop(),
                                     length: imageBlob?.size,
                                     type: imageBlob?.type,
                                     result: imageBlob,
-                                });
+                                } as any);
                             };
                             image.src = this.result as string;
                         };
@@ -415,9 +428,8 @@ function ChatInput({ quoteMessage, setQuoteMessage }: Props) {
             return Message.error('发送消息失败, 您当前处于离线状态');
         }
 
-        // @ts-ignore
-        const message = $input.current.value.trim();
-        if (message.length === 0) {
+        const message = $input.current?.value.trim();
+        if (!message || message.length === 0) {
             return null;
         }
 
@@ -441,13 +453,11 @@ function ChatInput({ quoteMessage, setQuoteMessage }: Props) {
             handleSendMessage(id, 'inviteV2', groupId);
         } else {
             const id = addSelfMessage('text', xss(message));
-            // 发送文本消息时带上 quote，并清空引用状态
             handleSendMessage(id, 'text', message, focus, quoteMessage?._id);
             if (setQuoteMessage) setQuoteMessage(null);
         }
 
-        // @ts-ignore
-        $input.current.value = '';
+        if ($input.current) $input.current.value = '';
         setExpressions([]);
         return null;
     }
@@ -458,7 +468,6 @@ function ChatInput({ quoteMessage, setQuoteMessage }: Props) {
             if (searchExpressionTimer) {
                 clearTimeout(searchExpressionTimer);
             }
-            // @ts-ignore
             searchExpressionTimer = setTimeout(async () => {
                 if (content.length >= 1 && content.length <= 4) {
                     const [err, res] = await fetch(
@@ -488,7 +497,7 @@ function ChatInput({ quoteMessage, setQuoteMessage }: Props) {
             toggleExpressionDialog(true);
             e.preventDefault();
         } else if (e.key === '@') {
-            if (!/@/.test($input.current.value)) {
+            if (!/@/.test($input.current?.value || '')) {
                 setAt({
                     enable: true,
                     content: '',
@@ -497,7 +506,7 @@ function ChatInput({ quoteMessage, setQuoteMessage }: Props) {
         } else if (at.enable) {
             const { key } = e;
             setTimeout(() => {
-                if (!/@/.test($input.current.value)) {
+                if (!/@/.test($input.current?.value || '')) {
                     setAt({ enable: false, content: '' });
                     return;
                 }
@@ -511,8 +520,7 @@ function ChatInput({ quoteMessage, setQuoteMessage }: Props) {
                 if (inputIME) {
                     return;
                 }
-                // @ts-ignore
-                const regexResult = /@([^ ]*)/.exec($input.current.value);
+                const regexResult = /@([^ ]*)/.exec($input.current?.value || '');
                 if (regexResult) {
                     setAt({ enable: true, content: regexResult[1] });
                 }
@@ -536,7 +544,7 @@ function ChatInput({ quoteMessage, setQuoteMessage }: Props) {
         if (!at.enable || linkman.type !== 'group') {
             return [];
         }
-        return linkman.onlineMembers.filter((member) => {
+        return linkman.onlineMembers.filter((member: any) => {
             const regex = new RegExp(`^${at.content}`);
             if (regex.test(member.user.username)) {
                 return true;
@@ -546,17 +554,17 @@ function ChatInput({ quoteMessage, setQuoteMessage }: Props) {
     }
 
     function replaceAt(targetUsername: string) {
-        // @ts-ignore
-        $input.current.value = $input.current.value.replace(
-            `@${at.content}`,
-            `@${targetUsername} `,
-        );
-        setAt({
-            enable: false,
-            content: '',
-        });
-        // @ts-ignore
-        $input.current.focus();
+        if ($input.current) {
+            $input.current.value = $input.current.value.replace(
+                `@${at.content}`,
+                `@${targetUsername} `,
+            );
+            setAt({
+                enable: false,
+                content: '',
+            });
+            $input.current.focus();
+        }
     }
 
     function handleSendCode(language: string, rawCode: string) {
@@ -588,157 +596,147 @@ function ChatInput({ quoteMessage, setQuoteMessage }: Props) {
     }
 
     return (
-        <>
-            {/* 引用预览条 */}
-            {quoteMessage && (
-                <div style={{ background: '#eee', padding: '4px 8px', display: 'flex', alignItems: 'center' }}>
-                    <span style={{ flex: 1 }}>引用 {quoteMessage.from?.username}: {quoteMessage.content}</span>
-                    <button onClick={() => setQuoteMessage?.(null)} style={{ cursor: 'pointer' }}>取消</button>
-                </div>
-            )}
-            <div className={Style.chatInput} {...aero}>
-                <Dropdown
-                    trigger={['click']}
-                    visible={expressionDialog}
-                    onVisibleChange={toggleExpressionDialog}
-                    overlay={
-                        <div className={Style.expressionDropdown}>
-                            <ExpressionAsync
-                                onSelectText={handleSelectExpression}
-                                onSelectImage={sendImageMessage}
-                            />
-                        </div>
-                    }
-                    animation="slide-up"
-                    placement="topLeft"
-                >
-                    <IconButton
-                        className={Style.iconButton}
-                        width={44}
-                        height={44}
-                        icon="expression"
-                        iconSize={32}
-                    />
-                </Dropdown>
-                <Dropdown
-                    trigger={['click']}
-                    overlay={
-                        <div className={Style.featureDropdown}>
-                            <Menu onClick={handleFeatureMenuClick}>
-                                <MenuItem key="huaji">发送滑稽</MenuItem>
-                                <MenuItem key="image">发送图片</MenuItem>
-                                <MenuItem key="code">发送代码</MenuItem>
-                                <MenuItem key="file">发送文件</MenuItem>
-                            </Menu>
-                        </div>
-                    }
-                    animation="slide-up"
-                    placement="topLeft"
-                >
-                    <IconButton
-                        className={Style.iconButton}
-                        width={44}
-                        height={44}
-                        icon="feature"
-                        iconSize={32}
-                    />
-                </Dropdown>
-                <form
-                    className={Style.form}
-                    autoComplete="off"
-                    onSubmit={(e) => e.preventDefault()}
-                >
-                    <input
-                        className={Style.input}
-                        type="text"
-                        placeholder="随便聊点啥吧, 不要无意义刷屏~~"
-                        maxLength={2048}
-                        ref={$input}
-                        onKeyDown={handleInputKeyDown}
-                        onPaste={handlePaste}
-                        onCompositionStart={() => {
-                            inputIME = true;
-                        }}
-                        onCompositionEnd={() => {
-                            inputIME = false;
-                        }}
-                        onFocus={() => toggleInputFocus(true)}
-                        onBlur={() => toggleInputFocus(false)}
-                    />
-
-                    {!isMobile && !inputFocus && (
-                        <Tooltip
-                            placement="top"
-                            mouseEnterDelay={0.5}
-                            overlay={
-                                <span>
-                                    支持粘贴图片发图
-                                    <br />
-                                    全局按 i 键聚焦
-                                </span>
-                            }
-                        >
-                            <i className={`iconfont icon-about ${Style.tooltip}`} />
-                        </Tooltip>
-                    )}
-                </form>
+        <div className={Style.chatInput} {...aero}>
+            <Dropdown
+                trigger={['click']}
+                visible={expressionDialog}
+                onVisibleChange={toggleExpressionDialog}
+                overlay={
+                    <div className={Style.expressionDropdown}>
+                        <ExpressionAsync
+                            onSelectText={handleSelectExpression}
+                            onSelectImage={sendImageMessage}
+                        />
+                    </div>
+                }
+                animation="slide-up"
+                placement="topLeft"
+            >
                 <IconButton
                     className={Style.iconButton}
                     width={44}
                     height={44}
-                    icon="send"
+                    icon="expression"
                     iconSize={32}
-                    onClick={sendTextMessage}
+                />
+            </Dropdown>
+            <Dropdown
+                trigger={['click']}
+                overlay={
+                    <div className={Style.featureDropdown}>
+                        <Menu onClick={handleFeatureMenuClick}>
+                            <MenuItem key="huaji">发送滑稽</MenuItem>
+                            <MenuItem key="image">发送图片</MenuItem>
+                            <MenuItem key="code">发送代码</MenuItem>
+                            <MenuItem key="file">发送文件</MenuItem>
+                        </Menu>
+                    </div>
+                }
+                animation="slide-up"
+                placement="topLeft"
+            >
+                <IconButton
+                    className={Style.iconButton}
+                    width={44}
+                    height={44}
+                    icon="feature"
+                    iconSize={32}
+                />
+            </Dropdown>
+            <form
+                className={Style.form}
+                autoComplete="off"
+                onSubmit={(e) => e.preventDefault()}
+            >
+                <input
+                    className={Style.input}
+                    type="text"
+                    placeholder="随便聊点啥吧, 不要无意义刷屏~~"
+                    maxLength={2048}
+                    ref={$input}
+                    onKeyDown={handleInputKeyDown}
+                    onPaste={handlePaste}
+                    onCompositionStart={() => {
+                        inputIME = true;
+                    }}
+                    onCompositionEnd={() => {
+                        inputIME = false;
+                    }}
+                    onFocus={() => toggleInputFocus(true)}
+                    onBlur={() => toggleInputFocus(false)}
                 />
 
-                <div className={Style.atPanel}>
-                    {at.enable &&
-                        getSuggestion().map((member) => (
-                            <div
-                                className={Style.atUserList}
-                                key={member.user._id}
-                                onClick={() => replaceAt(member.user.username)}
-                                role="button"
-                            >
-                                <Avatar size={24} src={member.user.avatar} />
-                                <p className={Style.atText}>
-                                    {member.user.username}
-                                </p>
-                            </div>
-                        ))}
-                </div>
-
-                {codeEditorDialog && (
-                    <CodeEditorAsync
-                        visible={codeEditorDialog}
-                        onClose={() => toggleCodeEditorDialog(false)}
-                        onSend={handleSendCode}
-                    />
+                {!isMobile && !inputFocus && (
+                    <Tooltip
+                        placement="top"
+                        mouseEnterDelay={0.5}
+                        overlay={
+                            <span>
+                                支持粘贴图片发图
+                                <br />
+                                全局按 i 键聚焦
+                            </span>
+                        }
+                    >
+                        <i className={`iconfont icon-about ${Style.tooltip}`} />
+                    </Tooltip>
                 )}
+            </form>
+            <IconButton
+                className={Style.iconButton}
+                width={44}
+                height={44}
+                icon="send"
+                iconSize={32}
+                onClick={sendTextMessage}
+            />
 
-                {expressions.length > 0 && (
-                    <div className={expressionList}>
-                        {expressions.map(({ image, width, height }) => (
-                            <div className={expressionImageContainer}>
-                                <img
-                                    className={expressionImage}
-                                    src={image}
-                                    key={image}
-                                    alt="表情图"
-                                    onClick={() =>
-                                        handleClickExpressionImage(
-                                            image,
-                                            width,
-                                            height,
-                                        )
-                                    }
-                                />
-                            </div>
-                        ))}
-                    </div>
-                )}
+            <div className={Style.atPanel}>
+                {at.enable &&
+                    getSuggestion().map((member: any) => (
+                        <div
+                            className={Style.atUserList}
+                            key={member.user._id}
+                            onClick={() => replaceAt(member.user.username)}
+                            role="button"
+                        >
+                            <Avatar size={24} src={member.user.avatar} />
+                            <p className={Style.atText}>
+                                {member.user.username}
+                            </p>
+                        </div>
+                    ))}
             </div>
-        </>
+
+            {codeEditorDialog && (
+                <CodeEditorAsync
+                    visible={codeEditorDialog}
+                    onClose={() => toggleCodeEditorDialog(false)}
+                    onSend={handleSendCode}
+                />
+            )}
+
+            {expressions.length > 0 && (
+                <div className={expressionList}>
+                    {expressions.map(({ image, width, height }) => (
+                        <div className={expressionImageContainer} key={image}>
+                            <img
+                                className={expressionImage}
+                                src={image}
+                                alt="表情图"
+                                onClick={() =>
+                                    handleClickExpressionImage(
+                                        image,
+                                        width,
+                                        height,
+                                    )
+                                }
+                            />
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
     );
 }
 

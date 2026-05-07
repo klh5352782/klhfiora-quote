@@ -209,16 +209,19 @@ function ChatInput({ quoteMessage, setQuoteMessage }: Props) {
     }
 
     // eslint-disable-next-line react/destructuring-assignment
+    // 修改1：handleSendMessage 接收 quote 参数并传递给 sendMessage
     async function handleSendMessage(
         localId: string,
         type: string,
         content: string,
         linkmanId = focus,
+        quote?: string,
     ) {
         if (linkman.unread > 0) {
             action.setLinkmanProperty(linkman._id, 'unread', 0);
         }
-        const [error, message] = await sendMessage(linkmanId, type, content);
+        // 将 quote 传给 sendMessage 服务
+        const [error, message] = await sendMessage(linkmanId, type, content, quote);
         if (error) {
             action.deleteMessage(focus, localId, true);
         } else {
@@ -444,7 +447,9 @@ function ChatInput({ quoteMessage, setQuoteMessage }: Props) {
             handleSendMessage(id, 'inviteV2', groupId);
         } else {
             const id = addSelfMessage('text', xss(message));
-            handleSendMessage(id, 'text', message);
+            // 修改2：发送文本时，传递 quoteMessage 的 _id
+            handleSendMessage(id, 'text', message, focus, quoteMessage?._id);
+            if (setQuoteMessage) setQuoteMessage(null);
         }
 
         // @ts-ignore
